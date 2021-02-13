@@ -5,14 +5,17 @@
 (3) Evaluate INVASE on ground truth and prediction
 """
 
+import sys
 import argparse
 import datetime
 
 import numpy as np
 import matplotlib.pyplot as plt
 
+import torch
 import torch.nn as nn
 from torch.optim import Adam
+from torch_geometric.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 
 from invase_gnn import InvaseGNN
@@ -33,17 +36,17 @@ def main():
          NameError(f"task {args.task} not allowed")
 
     # instantise model
-    idx_details = f"{args.task}_r-{arg.run_id}_l-{args.lamda}_g-{args.n_layer}_t-{args.conv_type}_s-{seed}"
-    model = InvaseGNN(fea_dim, label_dim, args.actor_h_dim, args.critic_h_dim, args.n_layer)
+    idx_details = f"{args.task}_r-{args.run_id}_l-{args.lamda}_g-{args.n_layer}_t-{args.conv_type}_s-{args.seed}"
+    model = InvaseGNN(fea_dim, label_dim, args.actor_h_dim, args.critic_h_dim, args.n_layer, args.lamda)
 
     # train
     loss = nn.CrossEntropyLoss()
-    optimizer = Adam(model.parameters, lr=args.lr, weight_decay=args.l2)
+    optimizer = Adam(model.parameters(), lr=args.learning_rate, weight_decay=args.l2)
     train(model, optimizer, idx_details, loss, args.device, train_loader, val_loader, args.epochs)
     
     # evaluate on test set
     critic_test_acc, baseline_test_acc, x_test, \
-                    selected_features, selected_nodes, y_trues, y_preds = model.evaluate(test_generator, loss, optimizer, device, task="test")
+                    selected_features, selected_nodes, y_trues, y_preds = model.evaluate(test_loader, loss, optimizer, args.device, task="test")
 
     # save results
     print("TEST")
@@ -61,7 +64,7 @@ def train(model, optimizer, idx_details, loss, device, train_generator, val_gene
     checkpoint_file = f"models/checkpoint_{idx_details}.pth.tar"
     best_file = f"models/best_{idx_details}.pth.tar"
 
-    best_loss, _ = model.evaluate(
+    _, best_critic_acc, _ = model.evaluate(
         generator=val_generator,
         criterion=loss,
         optimizer=None,
@@ -102,15 +105,15 @@ def train(model, optimizer, idx_details, loss, device, train_generator, val_gene
                     val_actor_loss, val_critic_acc, val_baseline_acc))
 
             # save model
-            is_best = val_loss < best_loss
+            is_best = val_critic_acc < best_critic_acc
             if is_best:
-                best_loss = val_loss
+                best_critic_acc = val_critic_acc
 
             # add seperate accuracy/loss metrics
             checkpoint_dict = {
                 "epoch": epoch,
                 "state_dict": model.state_dict(),
-                "best_error": best_loss,
+                "best_acc": best_critic_acc,
                 "optimizer": optimizer.state_dict()
             }
             save_checkpoint(checkpoint_dict,
@@ -183,7 +186,7 @@ def input_parser():
                         help='Type of Graph Convolution layers')
 
     parser.add_argument("--batch-size", "--bsize",
-                        default=256,
+                        default=32,
                         type=int,
                         metavar="N",
                         help="mini-batch size (default: 256)")

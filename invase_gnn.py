@@ -5,10 +5,13 @@ with extension to work with GNNs.
 """
 
 # import packages
+from tqdm import trange
+
 import numpy as np
 
 import torch
 import torch.nn as nn
+from torch_scatter import scatter
 
 from torch_geometric.nn import GCNConv, global_mean_pool
 from torch_geometric.utils import subgraph
@@ -23,7 +26,7 @@ class InvaseGNN(nn.Module):
     - n_layer: the number of graph conv layers
     - activation: activation function of models
     """
-    def __init__(self, fea_dim, label_dim, actor_h_dim, critic_h_dim, n_layer):
+    def __init__(self, fea_dim, label_dim, actor_h_dim, critic_h_dim, n_layer, lamda):
 
         super(InvaseGNN, self).__init__()
         
@@ -32,6 +35,7 @@ class InvaseGNN(nn.Module):
         self.n_layer = n_layer
         self.fea_dim = fea_dim 
         self.label_dim = label_dim
+        self.lamda = lamda
         # Build the selector , n_layer, actor_h_dim, num_nodes
         self.actor = Actor(self.fea_dim, self.n_layer, self.actor_h_dim)
         # Build the predictor
@@ -54,47 +58,43 @@ class InvaseGNN(nn.Module):
         """
         x, edge_index, batch = data.x, data.edge_index, data.batch
         # Generate a batch of selection probability
-        node_prob, fea_prob = self.actor(x, edge_index, batch)
-        # Sampling the features based on the selection_probability
-        print(node_prob)
-        node_selection = torch.bernoulli(node_prob)
-        print(node_selection)         
-        node_selection = torch.nonzero(node_selection)
-        print(node_selection)
-        fea_selection = torch.bernoulli(fea_prob)
-        print(fea_selection)
-        # make subgraph
-        subgraph_edge_index = subgraph(node_selection, data.edge_index)
-        print(subgraph_edges)
-        # mask out features
-        subgraph_x = x[node_selection] * fea_selection
-        print(subgraph_x)
-        subgraph_batch = batch[node_selection]
-        print(subgraph_batch)
-        # Prediction
-        y_hat = self.critic(subgraph_x, subgraph_edge_index, subgraph_batch)
-        print(y_hat)
 
+        # pass through selector
+        node_prob, fea_prob = self(x, edge_index, batch, component="actor")
+        # Sampling the features based on the selection_probability
+        node_selection_mask = torch.bernoulli(node_prob)       
+        node_selection = torch.squeeze(torch.nonzero(node_selection_mask, as_tuple=False))
+        fea_selection_mask = torch.bernoulli(fea_prob)
+        # make subgraph
+        # mask out features
+        subgraph_x = x * fea_selection_mask[batch]  # keep all the nodes
+        subgraph_edge_index, _ = subgraph(node_selection, edge_index)  # returning only the edges of the subgraph
+        # Prediction
+        y_hat = self.critic(subgraph_x, subgraph_edge_index, batch)
         # unnormalised - need to softmax
         return y_hat
 
-    def actor_loss(self, node_selection_mask, fea_selection_mask, critic_out, baseline_out, y_true, node_pred, fea_pred):
+    def actor_loss(self, node_selection_mask, fea_selection_mask, batch_idx, critic_out, baseline_out, y_true, node_pred, fea_pred):
+        # print(y_true)
+        # print(node_selection_mask)
+        # print(fea_selection_mask)
+        y_true_one_hot = nn.functional.one_hot(y_true.long(), num_classes=self.label_dim)
+        # print(y_true_one_hot.shape)
+        # print(critic_out.shape)
+        # print(baseline_out.shape)
         
-        y_true_one_hot = nn.functional.one_hot(y_true, num_classes=self.label_dim)
-        print(y_true_one_hot.shape)
-        print(critic_out.shape)
-        print(baseline_out.shape)
         critic_loss = -torch.sum(y_true_one_hot * torch.log(critic_out + 1e-8), dim=1)
         baseline_loss = -torch.sum(y_true_one_hot * torch.log(baseline_out + 1e-8), dim=1)
         reward = -(critic_loss - baseline_loss)
         # Policy gradient loss computation.
         # for nodes
-        custom_actor_loss = \
-            reward * torch.sum(node_selection_mask * torch.log(node_pred + 1e-8) + (1 - node_selection_mask) * torch.log(1 - node_pred + 1e-8), dim=1)
+        # get graphwise loss
+        custom_actor_loss = reward * scatter(node_selection_mask * torch.log(node_pred + 1e-8) + (1 - node_selection_mask) * torch.log(1 - node_pred + 1e-8), 
+                                                batch_idx, reduce="sum")
 
-        custom_actor_loss -= self.lamda * torch.mean(node_pred, dim=1)  #l0 loss normalised?
+        custom_actor_loss -= self.lamda * scatter(node_pred, batch_idx, reduce="mean") #normalise by number of graphs in batch
         
-        # for features
+        # add loss for features
         custom_actor_loss += \
             reward * torch.sum(fea_selection_mask * torch.log(fea_pred + 1e-8) + (1 - fea_selection_mask) * torch.log(1 - fea_pred + 1e-8), dim=1)
 
@@ -114,7 +114,8 @@ class InvaseGNN(nn.Module):
         - node_importance: instance-wise node importance for nodes in batch
         - feature_importance: instance-wise (per graph) feature importance.
         """        
-        node_importance, feature_importance = self.actor(data) 
+        x, edge_index, batch = data.x, data.edge_index, data.batch
+        node_importance, feature_importance = self.actor(x, edge_index, batch) 
 
         return np.asarray(feature_importance), np.asarray(node_importance)
 
@@ -153,40 +154,51 @@ class InvaseGNN(nn.Module):
                 # these are batched graphs
                 data = data.to(device)
                 x, edge_index, batch, y_true = data.x, data.edge_index, data.batch, data.y
-
                 # prediction on full graph
                 baseline_logits = self(x, edge_index, batch, component="baseline")
-                print(baseline_logits.shape)
-                print(y_true.shape)
+
                 baseline_loss = criterion(baseline_logits, y_true)  
 
                 # pass through selector
                 node_prob, fea_prob = self(x, edge_index, batch, component="actor")
-
                 # Sampling the features based on the selection_probability
-                print(node_prob)
-                node_selection_mask = torch.bernoulli(node_prob)
-                print(node_selection)         
-                node_selection = torch.nonzero(node_selection_mask)
-                print(node_selection)
+                node_selection_mask = torch.bernoulli(node_prob)       
+                node_selection = torch.squeeze(torch.nonzero(node_selection_mask, as_tuple=False))
                 fea_selection_mask = torch.bernoulli(fea_prob)
-                print(fea_selection_mask)
-                # make subgraph
-                subgraph_edge_index = subgraph(node_selection, data.edge_index)
-                print(subgraph_edges)
-                # mask out features
-                subgraph_x = x[node_selection] * fea_selection_mask
-                print(subgraph_x)
-                subgraph_batch = batch[node_selection]
-                print(subgraph_batch)
 
-                # prediction on selected subgraph
-                critic_logits = self(subgraph_x, subgraph_edge_index, subgraph_batch, component="critic")
-                print(critic_logits)
+                # make subgraph
+                # mask out features
+                subgraph_x = x * fea_selection_mask[batch]  # keep all the nodes
+                # print(node_selection.shape)
+                # print(edge_index.shape)
+                # print(subgraph_x.shape)
+                # print(node_selection)
+                # print(edge_index)
+                # print(subgraph_x)
+                
+                subgraph_edge_index, _ = subgraph(node_selection, edge_index)  # returning only the edges of the subgraph
+                # print(subgraph_x.shape)
+                # print(subgraph_edge_index.shape)
+                # print(x.shape)
+                # print(x[node_selection].shape)
+                # print(fea_selection_mask.shape)
+                # subgraph_batch = batch[node_selection]
+                # print(subgraph_batch.shape)
+                # print(fea_selection_mask[subgraph_batch].shape)
+                
+                # subgraph_x = x[node_selection] * fea_selection_mask[subgraph_batch]
+
+                # print(subgraph_x.shape)
+                # prediction on selected subgraph - use the same node features! edges will just not include them!
+                # remove isolated nodes maybe?
+                # critic_logits = self(subgraph_x, subgraph_edge_index, subgraph_batch, component="critic")
+                critic_logits = self(subgraph_x, subgraph_edge_index, batch, component="critic")
+                # print(critic_logits.shape)
                 critic_loss = criterion(critic_logits, y_true)  
                 
                 actor_loss = self.actor_loss(node_selection_mask.clone().detach(), 
                                             fea_selection_mask.clone().detach(),
+                                            batch,
                                             self.softmax(critic_logits).clone().detach(), 
                                             self.softmax(baseline_logits).clone().detach(), 
                                             y_true.float(), 
@@ -195,11 +207,11 @@ class InvaseGNN(nn.Module):
 
                 actor_loss_meter.update(actor_loss.data.cpu().item(), y_true.size(0))
                 critic_preds = torch.argmax(critic_logits, dim=1)
-                critic_acc = torch.sum(critic_preds==y_true)/len(y_true)
-                critic_acc_meter.update(acc)
+                critic_acc = torch.sum(critic_preds==y_true).float() / y_true.size(0)
+                critic_acc_meter.update(critic_acc)
                 baseline_preds = torch.argmax(baseline_logits, dim=1)
-                baseline_acc = torch.sum(baseline_preds==y_true)/len(y_true)
-                baseline_acc_meter.update(acc)
+                baseline_acc = torch.sum(baseline_preds==y_true).float() / y_true.size(0)
+                baseline_acc_meter.update(baseline_acc)
 
                 if task == "test":
                     # collect and analyse results
@@ -213,9 +225,6 @@ class InvaseGNN(nn.Module):
 
                 else:
 
-                    # preds = torch.argmax(logits, dim=1)
-                    # acc = torch.sum(preds==y_batch)/len(y_batch)
-                    # acc_meter.update(acc)
                     if task == "train":
                         # compute gradient and do SGD step
                         optimizer.zero_grad()
@@ -237,17 +246,18 @@ class InvaseGNN(nn.Module):
 
 
 class Actor(nn.Module):
-    """Selector network. Output logits corresponding to probabilities of 
+    """Selector network. Output probabilities of 
     selecting each node AND features.
     """
     def __init__(self, fea_dim, n_layer, actor_h_dim):
         super(Actor, self).__init__()
-        self.convs = n.ModuleList(
+        self.convs = nn.ModuleList(
                         [GCNConv(fea_dim, fea_dim) for i in range(n_layer)])
         self.fea_lin1 = nn.Linear(fea_dim, actor_h_dim)
         self.fea_lin2 = nn.Linear(actor_h_dim, fea_dim)
         self.node_lin = nn.Linear(fea_dim, 1)
         self.act = nn.ReLU()
+        self.sigmoid = nn.Sigmoid()
 
     def forward(self, x, edge_index, batch):
         # graph convolutions
@@ -257,19 +267,18 @@ class Actor(nn.Module):
 
         # 3. Apply a final classifier
         node_prob = torch.squeeze(self.node_lin(x))            # [batch_num_nodes]
-        print(node_prob.shape)
 
         # 4. get feature importance for graph
         fea_prob = global_mean_pool(x, batch)                  
         fea_prob = self.act(self.fea_lin1(fea_prob))           # [batch_size, actor_h_dim]
         fea_prob = self.fea_lin2(fea_prob)                     # [batch_size, fea_dim]
 
-        return node_prob, fea_prob
+        return self.sigmoid(node_prob), self.sigmoid(fea_prob)
 
 class Critic(nn.Module):
     def __init__(self, fea_dim, n_layer, critic_h_dim, label_dim):
         super(Critic, self).__init__()
-        self.convs = n.ModuleList(
+        self.convs = nn.ModuleList(
                         [GCNConv(fea_dim, fea_dim) for i in range(n_layer)])
         self.lin1 = nn.Linear(fea_dim, critic_h_dim)
         self.lin2 = nn.Linear(critic_h_dim, label_dim)
@@ -279,7 +288,7 @@ class Critic(nn.Module):
         # graph convolutions
         for graph_func in self.convs:
             x = graph_func(x, edge_index)
-            x = act(x)
+            x = self.act(x)
 
         # 2. Readout layer
         x = global_mean_pool(x, batch)       # [batch_size, fea_dim]
@@ -292,18 +301,17 @@ class Critic(nn.Module):
 class Baseline(nn.Module):
     def __init__(self, fea_dim, n_layer, critic_h_dim, label_dim):
         super(Baseline, self).__init__()
-        self.convs = n.ModuleList(
+        self.convs = nn.ModuleList(
                         [GCNConv(fea_dim, fea_dim) for i in range(n_layer)])
         self.lin1 = nn.Linear(fea_dim, critic_h_dim)
         self.lin2 = nn.Linear(critic_h_dim, label_dim)
         self.act = nn.ReLU()
 
-    def forward(self, data):
-        x, edge_index, batch = data.x, data.edge_index, data.batch
+    def forward(self, x, edge_index, batch):
         # graph convolutions
         for graph_func in self.convs:
             x = graph_func(x, edge_index)
-            x = act(x)
+            x = self.act(x)
 
         # 2. Readout layer
         x = global_mean_pool(x, batch)  # [batch_size, fea_dim]

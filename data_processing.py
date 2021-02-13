@@ -8,8 +8,8 @@ import os.path as osp
 import numpy as np
 from sklearn.model_selection import train_test_split as split
 
-from torch_geometric.data import TUDataset
-from torch_geometric.data import DataLoader
+from torch_geometric.datasets import TUDataset
+import torch_geometric.transforms as T
 
 # add functions from GNNExplainer to construct synthetic graphs from networkx
 
@@ -31,8 +31,9 @@ def mutag_data(seed, val_size, test_size):
     test_dataset- PyG dataset
     """
     dataset = 'Mutagenicity'
+    # dataset = 'MUTAG'
     path = osp.join(osp.dirname(osp.realpath(__file__)), 'data', 'TUDataset')
-    dataset = TUDataset(path, dataset, transform=T.NormalizeFeatures())
+    dataset = TUDataset(path, dataset, transform=T.NormalizeFeatures(), cleaned=True)
     print(f'Dataset: {dataset}:')
     print('====================')
     print(f'Number of graphs: {len(dataset)}')
