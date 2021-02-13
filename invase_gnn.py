@@ -152,8 +152,8 @@ class InvaseGNN(nn.Module):
         with trange(len(generator)) as t:
             for data in generator:
                 # these are batched graphs
-                data = data.to(device)
                 x, edge_index, batch, y_true = data.x, data.edge_index, data.batch, data.y
+                x, edge_index, batch, y_true= x.to(device), edge_index.to(device), batch.to(device), y_true.to(device)
                 # prediction on full graph
                 baseline_logits = self(x, edge_index, batch, component="baseline")
 
@@ -169,33 +169,10 @@ class InvaseGNN(nn.Module):
                 # make subgraph
                 # mask out features
                 subgraph_x = x * fea_selection_mask[batch]  # keep all the nodes
-                # print(node_selection.shape)
-                # print(edge_index.shape)
-                # print(subgraph_x.shape)
-                # print(node_selection)
-                # print(edge_index)
-                # print(subgraph_x)
-                
                 subgraph_edge_index, _ = subgraph(node_selection, edge_index)  # returning only the edges of the subgraph
-                # print(subgraph_x.shape)
-                # print(subgraph_edge_index.shape)
-                # print(x.shape)
-                # print(x[node_selection].shape)
-                # print(fea_selection_mask.shape)
-                # subgraph_batch = batch[node_selection]
-                # print(subgraph_batch.shape)
-                # print(fea_selection_mask[subgraph_batch].shape)
-                
-                # subgraph_x = x[node_selection] * fea_selection_mask[subgraph_batch]
-
-                # print(subgraph_x.shape)
-                # prediction on selected subgraph - use the same node features! edges will just not include them!
-                # remove isolated nodes maybe?
-                # critic_logits = self(subgraph_x, subgraph_edge_index, subgraph_batch, component="critic")
                 critic_logits = self(subgraph_x, subgraph_edge_index, batch, component="critic")
-                # print(critic_logits.shape)
-                critic_loss = criterion(critic_logits, y_true)  
                 
+                critic_loss = criterion(critic_logits, y_true)  
                 actor_loss = self.actor_loss(node_selection_mask.clone().detach(), 
                                             fea_selection_mask.clone().detach(),
                                             batch,

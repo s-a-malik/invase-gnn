@@ -38,7 +38,7 @@ def main():
     # instantise model
     idx_details = f"{args.task}_r-{args.run_id}_l-{args.lamda}_g-{args.n_layer}_t-{args.conv_type}_s-{args.seed}"
     model = InvaseGNN(fea_dim, label_dim, args.actor_h_dim, args.critic_h_dim, args.n_layer, args.lamda)
-
+    model.to(args.device)
     # train
     loss = nn.CrossEntropyLoss()
     optimizer = Adam(model.parameters(), lr=args.learning_rate, weight_decay=args.l2)
@@ -163,12 +163,12 @@ def input_parser():
                         default=0.1,
                         help='INVASE hyperparameter')
 
-    parser.add_argument('--actor_h_dim',
+    parser.add_argument('--actor-h-dim',
                         help='hidden state dimensions for actor',
                         default=100,
                         type=int)
 
-    parser.add_argument('--critic_h_dim',
+    parser.add_argument('--critic-h-dim',
                         help='hidden state dimensions for critic',
                         default=200,
                         type=int)
