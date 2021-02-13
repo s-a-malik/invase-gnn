@@ -26,7 +26,7 @@ class InvaseGNN(nn.Module):
     - n_layer: the number of graph conv layers
     - activation: activation function of models
     """
-    def __init__(self, fea_dim, label_dim, actor_h_dim, critic_h_dim, n_layer, lamda):
+    def __init__(self, fea_dim, label_dim, actor_h_dim, critic_h_dim, n_layer, node_lamda, fea_lamda):
 
         super(InvaseGNN, self).__init__()
         
@@ -35,10 +35,10 @@ class InvaseGNN(nn.Module):
         self.n_layer = n_layer
         self.fea_dim = fea_dim 
         self.label_dim = label_dim
-        self.lamda = lamda
-        # Build the selector , n_layer, actor_h_dim, num_nodes
+        self.lamda1 = node_lamda
+        self.lamda2 = fea_lamda
+
         self.actor = Actor(self.fea_dim, self.n_layer, self.actor_h_dim)
-        # Build the predictor
         self.critic = Critic(self.fea_dim, self.n_layer, self.critic_h_dim, self.label_dim)
         self.baseline = Baseline(self.fea_dim, self.n_layer, self.critic_h_dim, self.label_dim)
         self.softmax = nn.Softmax(dim=-1)
@@ -75,32 +75,29 @@ class InvaseGNN(nn.Module):
         return y_hat
 
     def actor_loss(self, node_selection_mask, fea_selection_mask, batch_idx, critic_out, baseline_out, y_true, node_pred, fea_pred):
-        # print(y_true)
-        # print(node_selection_mask)
-        # print(fea_selection_mask)
+
         y_true_one_hot = nn.functional.one_hot(y_true.long(), num_classes=self.label_dim)
-        # print(y_true_one_hot.shape)
-        # print(critic_out.shape)
-        # print(baseline_out.shape)
         
         critic_loss = -torch.sum(y_true_one_hot * torch.log(critic_out + 1e-8), dim=1)
         baseline_loss = -torch.sum(y_true_one_hot * torch.log(baseline_out + 1e-8), dim=1)
         reward = -(critic_loss - baseline_loss)
+        print(reward)
+        print(scatter(node_selection_mask * torch.log(node_pred + 1e-8) + (1 - node_selection_mask) * torch.log(1 - node_pred + 1e-8), 
+                                                batch_idx, reduce="sum"))
         # Policy gradient loss computation.
         # for nodes
-        # get graphwise loss
+        # get graphwise loss - this depends on size of graphs in batch
         custom_actor_loss = reward * scatter(node_selection_mask * torch.log(node_pred + 1e-8) + (1 - node_selection_mask) * torch.log(1 - node_pred + 1e-8), 
                                                 batch_idx, reduce="sum")
 
-        custom_actor_loss -= self.lamda * scatter(node_pred, batch_idx, reduce="mean") #normalise by number of graphs in batch
+        custom_actor_loss -= self.lamda1 * scatter(node_pred, batch_idx, reduce="mean") #normalise by number of graphs in batch
         
         # add loss for features
         custom_actor_loss += \
             reward * torch.sum(fea_selection_mask * torch.log(fea_pred + 1e-8) + (1 - fea_selection_mask) * torch.log(1 - fea_pred + 1e-8), dim=1)
 
-        custom_actor_loss -= self.lamda * torch.mean(fea_pred, dim=1)  #l0 loss normalised?
-
-        custom_actor_loss = torch.mean(-custom_actor_loss)
+        custom_actor_loss -= self.lamda2 * torch.mean(fea_pred, dim=1)  #l0 loss normalised?
+        custom_actor_loss = torch.mean(-custom_actor_loss)  # mean over batch
 
         return custom_actor_loss
 
@@ -172,7 +169,7 @@ class InvaseGNN(nn.Module):
                 critic_loss = criterion(critic_logits, y_true)  
                 actor_loss = self.actor_loss(node_selection_mask.clone().detach(), 
                                             fea_selection_mask.clone().detach(),
-                                            batch,
+                                            batch.clone().detach(),
                                             self.softmax(critic_logits).clone().detach(), 
                                             self.softmax(baseline_logits).clone().detach(), 
                                             y_true.float(), 
@@ -189,11 +186,11 @@ class InvaseGNN(nn.Module):
 
                 if task == "test":
                     # collect and analyse results
-                    x_test.append(data)
-                    selected_features.append(fea_prob)
-                    selected_nodes.append(node_prob)
-                    y_trues.append(y_true)
-                    y_preds.append(critic_preds)
+                    x_test += data
+                    selected_features += fea_prob
+                    selected_nodes += node_prob
+                    y_trues += y_true
+                    y_preds += critic_preds
 
                 else:
 

@@ -157,11 +157,17 @@ def input_parser():
                         metavar="PATH",
                         help="Task to perform (mutag, syn1)")
 
-    parser.add_argument('--lamda',
+    parser.add_argument('--node-lamda',
                         type=float,
                         nargs='?',
                         default=0.1,
-                        help='INVASE hyperparameter')
+                        help='INVASE hyperparameter for nodes')
+
+    parser.add_argument('--fea-lamda',
+                        type=float,
+                        nargs='?',
+                        default=0.1,
+                        help='INVASE hyperparameter for features')
 
     parser.add_argument('--actor-h-dim',
                         help='hidden state dimensions for actor',
