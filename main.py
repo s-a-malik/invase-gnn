@@ -11,26 +11,46 @@ import datetime
 import numpy as np
 import matplotlib.pyplot as plt
 
+import torch.nn as nn
+from torch.optim import Adam
 from torch.utils.tensorboard import SummaryWriter
 
+from invase_gnn import InvaseGNN
 from utils import save_checkpoint
+from data_processing import mutag_data
 
 def main():
 
     # get dataset
     if args.task == 'mutag':
-        get_data = 0
-
-    # dataloaders
-
+        train_dataset, val_dataset, test_dataset = mutag_data(args.seed, args.val_size, args.test_size)
+        fea_dim = train_dataset.num_features
+        label_dim = train_dataset.num_classes
+        train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True)
+        val_loader = DataLoader(val_dataset, batch_size=args.batch_size, shuffle=True)
+        test_loader = DataLoader(test_dataset, batch_size=args.batch_size, shuffle=False)
+    else:
+         NameError(f"task {args.task} not allowed")
 
     # instantise model
     idx_details = f"{args.task}_r-{arg.run_id}_l-{args.lamda}_g-{args.n_layer}_t-{args.conv_type}_s-{seed}"
+    model = InvaseGNN(fea_dim, label_dim, args.actor_h_dim, args.critic_h_dim, args.n_layer)
 
     # train
-
-
+    loss = nn.CrossEntropyLoss()
+    optimizer = Adam(model.parameters, lr=args.lr, weight_decay=args.l2)
+    train(model, optimizer, idx_details, loss, args.device, train_loader, val_loader, args.epochs)
+    
     # evaluate on test set
+    critic_test_acc, baseline_test_acc, x_test, \
+                    selected_features, selected_nodes, y_trues, y_preds = model.evaluate(test_generator, loss, optimizer, device, task="test")
+
+    # save results
+    print("TEST")
+    print("--------")
+    print("Critic Acc {:.3f}\t Baseline Acc {:.3f}".format(critic_test_acc, baseline_test_acc))
+
+    print("example:", x_test[0], selected_features[0], selected_nodes[0], y_trues[0], y_preds[0])
 
 
 def train(model, optimizer, idx_details, loss, device, train_generator, val_generator, epochs):
@@ -48,12 +68,11 @@ def train(model, optimizer, idx_details, loss, device, train_generator, val_gene
         device=device,
         task="val"
     )
-
     # try, except to be able to stop training midway through
     try:
         for epoch in range(epochs):
             # Training
-            train_loss, train_acc = model.evaluate(
+            train_actor_loss, train_critic_acc, train_baseline_acc = model.evaluate(
                 generator=train_generator,
                 criterion=loss,
                 optimizer=optimizer,
@@ -64,25 +83,30 @@ def train(model, optimizer, idx_details, loss, device, train_generator, val_gene
             # Validation
             with torch.no_grad():
                 # evaluate on validation set
-                val_loss, val_acc = model.evaluate(
+                val_actor_loss, val_critic_acc, val_baseline_acc  = model.evaluate(
                     generator=val_generator,
                     criterion=loss,
                     optimizer=None,
                     device=device,
                     task="val"
                 )
-
-            print("Epoch: [{}/{}]\n"
-                "Train      : Loss {:.4f}\t Acc: {:.4f}\t"
-                "Validation : Loss {:.4f}\t Acc: {:.4f}\t".format(
+            # print actor, critic and baseline accuracy as in INVASE
+            if epoch % 10 == 0:
+                print("Epoch: [{}/{}]\n"
+                  "Train      : Actor Loss {:.4f}\t"
+                  "Critic Acc {:.3f}\t Baseline Acc {:.3f}\n"
+                  "Validation : Actor Loss {:.4f}\t"
+                  "Critic Acc {:.3f}\t Baseline Acc {:.3f}\n".format(
                     epoch+1, epochs,
-                    train_loss, train_acc, val_loss, val_acc))
+                    train_actor_loss, train_critic_acc, train_baseline_acc,
+                    val_actor_loss, val_critic_acc, val_baseline_acc))
 
             # save model
             is_best = val_loss < best_loss
             if is_best:
                 best_loss = val_loss
 
+            # add seperate accuracy/loss metrics
             checkpoint_dict = {
                 "epoch": epoch,
                 "state_dict": model.state_dict(),
@@ -95,25 +119,26 @@ def train(model, optimizer, idx_details, loss, device, train_generator, val_gene
                 best_file)
 
             # write actor, critic and baseline loss/accuracy
-
-            writer.add_scalar("loss/train", train_loss, epoch+1)
-            writer.add_scalar("loss/validation", val_loss, epoch+1)
-            writer.add_scalar("acc/train", train_acc, epoch+1)
-            writer.add_scalar("acc/validation", val_acc, epoch+1)
+            writer.add_scalar("actor_loss/train", train_actor_loss, epoch+1)
+            writer.add_scalar("critic_acc/train", train_critic_acc, epoch+1)
+            writer.add_scalar("baseline_acc/train", train_baseline_acc, epoch+1)
+            writer.add_scalar("actor_loss/validation", val_actor_loss, epoch+1)
+            writer.add_scalar("critic_acc/validation", val_critic_acc, epoch+1)
+            writer.add_scalar("baseline_acc/validation", val_baseline_acc, epoch+1)
 
     except KeyboardInterrupt:
         pass
 
-def test():
+# def test():
 
-    # initantise the model
+#     # initantise the model
 
-    # load state
-    checkpoint = torch.load(model_path, map_location=device)
-    model.load_state_dict(checkpoint["state_dict"])
-    # eval
-    test_acc, test_x, y_true, y_pred = model.evaluate(test_generator, loss, optimiser, device, task="test")
-    print(test_acc, y_true[:10], y_pred[:10])
+#     # load state
+#     checkpoint = torch.load(model_path, map_location=device)
+#     model.load_state_dict(checkpoint["state_dict"])
+#     # eval
+#     test_acc, test_x, y_true, y_pred = model.evaluate(test_generator, loss, optimiser, device, task="test")
+#     print(test_acc, y_true[:10], y_pred[:10])
 
 
 def input_parser():
@@ -135,22 +160,17 @@ def input_parser():
                         default=0.1,
                         help='INVASE hyperparameter')
 
-    parser.add_argument('--fea-dim',
-                        type=int,
-                        nargs='?',
-                        default=32,
-                        help='Node feature dimension')
-
     parser.add_argument('--actor_h_dim',
                         help='hidden state dimensions for actor',
                         default=100,
                         type=int)
+
     parser.add_argument('--critic_h_dim',
                         help='hidden state dimensions for critic',
                         default=200,
                         type=int)
 
-    parser.add_argument('--conv-layers',
+    parser.add_argument('--n-layer',
                         type=int,
                         nargs='?',
                         default=3,
@@ -174,15 +194,25 @@ def input_parser():
                         metavar="N",
                         help="seed for random number generator")
 
+    parser.add_argument("--val-size",
+                        default=0.1,
+                        type=float,
+                        help="Proportion of data to use for validation")
+
+    parser.add_argument("--test-size",
+                        default=0.1,
+                        type=float,
+                        help="Proportion of data to use for testing")
+
     # optimiser inputs
     parser.add_argument("--epochs",
-                        default=300,
+                        default=100,
                         type=int,
                         metavar="N",
                         help="number of total epochs to run")
 
     parser.add_argument("--loss",
-                        default="BCE",
+                        default="CE",
                         type=str,
                         metavar="str",
                         help="choose a Loss Function")
@@ -198,6 +228,12 @@ def input_parser():
                         type=float,
                         metavar="float",
                         help="initial learning rate (default: 1e-4)")
+
+    parser.add_argument("--l2",
+                        default=0.0,
+                        type=float,
+                        metavar="float",
+                        help="L2 Regularisation")
 
     parser.add_argument("--run-id",
                         default=0,

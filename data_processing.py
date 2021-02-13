@@ -3,25 +3,53 @@
 """
 
 # import packages
-import numpy as np
+import os.path as osp
 
+import numpy as np
+from sklearn.model_selection import train_test_split as split
+
+from torch_geometric.data import TUDataset
+from torch_geometric.data import DataLoader
 
 # add functions from GNNExplainer to construct synthetic graphs from networkx
 
 
 def syn1_data(seed=0):
-    """Synthetic graph dataset
-    Task: Node Classification
+    """Synthetic graph dataset 
+    Task: Node Classification on a single large graph
 
     Returns:
-    data: PyG dataset
-
+    dataset - PyG dataset
     """
 
-def mutag_data(seed=0):
-    """Load the mutag dataset 
-    Task: Graph Classification
+def mutag_data(seed, val_size, test_size):
+    """Load the mutagenicity dataset 
+    Task: Graph Classification - dataset of various graphs we want to classify
 
     Returns:
-    data: PyG dataset
+    train_dataset - PyG dataloader
+    test_dataset- PyG dataset
     """
+    dataset = 'Mutagenicity'
+    path = osp.join(osp.dirname(osp.realpath(__file__)), 'data', 'TUDataset')
+    dataset = TUDataset(path, dataset, transform=T.NormalizeFeatures())
+    print(f'Dataset: {dataset}:')
+    print('====================')
+    print(f'Number of graphs: {len(dataset)}')
+    print(f'Number of features: {dataset.num_features}')
+    print(f'Number of classes: {dataset.num_classes}')
+
+    indices = [i for i in range(len(dataset))]
+    train_idx, test_idx = split(indices, random_state=seed, test_size=test_size)
+    train_dataset = dataset[train_idx]
+    test_dataset = dataset[test_idx]
+
+    indices = [i for i in range(len(train_dataset))]
+    train_idx, val_idx = split(indices, random_state=seed, test_size=val_size/(1-test_size))
+    val_dataset = train_dataset[val_idx]
+    train_dataset = train_dataset[train_idx]
+    print(f'Number of training graphs: {len(train_dataset)}')
+    print(f'Number of val graphs: {len(val_dataset)}')
+    print(f'Number of test graphs: {len(test_dataset)}')
+
+    return train_dataset, val_dataset, test_dataset

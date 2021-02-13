@@ -78,22 +78,23 @@ def prediction_performance_metric (y_test, y_hat):
     acc = accuracy_score (y_test[:, 1], 1.*(y_hat[:, 1] > 0.5))
     
     return auc, apr, acc
-  
-  
-def bernoulli_sampling (prob):
-    """ Sampling Bernoulli distribution by given probability.
-    
-    Args:
-        - prob: P(Y = 1) in Bernoulli distribution.
-        
-    Returns:
-        - samples: samples from Bernoulli distribution
-    """  
 
-    n, d = prob.shape
-    samples = np.random.binomial(1, prob, (n, d))
-            
-    return samples
+class AverageMeter(object):
+    """Computes and stores the average and current value"""
+    def __init__(self):
+        self.reset()
+
+    def reset(self):
+        self.val = 0
+        self.avg = 0
+        self.sum = 0
+        self.count = 0
+
+    def update(self, val, n=1):
+        self.val = val
+        self.sum += val * n
+        self.count += n
+        self.avg = self.sum / self.count
 
 
 def save_checkpoint(state, is_best, checkpoint="checkpoint.pth.tar", best="best.pth.tar"):

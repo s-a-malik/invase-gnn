@@ -3,6 +3,10 @@
 
 import os.path as osp
 
+import numpy as np
+
+from sklearn.model_selection import train_test_split as split
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -12,7 +16,7 @@ import torch_geometric.transforms as T
 from torch_geometric.nn import GCNConv, GNNExplainer, global_mean_pool
 from torch_geometric.data import DataLoader
 
-dataset = 'MUTAG'
+dataset = 'Mutagenicity'
 path = osp.join(osp.dirname(osp.realpath(__file__)), 'data', 'TUDataset')
 dataset = TUDataset(path, dataset, transform=T.NormalizeFeatures())
 print(f'Dataset: {dataset}:')
@@ -21,11 +25,12 @@ print(f'Number of graphs: {len(dataset)}')
 print(f'Number of features: {dataset.num_features}')
 print(f'Number of classes: {dataset.num_classes}')
 
-torch.manual_seed(12345)
-dataset = dataset.shuffle()
-
-train_dataset = dataset[:150]
-test_dataset = dataset[150:]
+# torch.manual_seed(12345)
+# dataset = dataset.shuffle()
+indices = [i for i in range(len(dataset))]
+train_idx, test_idx = split(indices, random_state=12345, test_size=0.2)
+train_dataset = dataset[train_idx]
+test_dataset = dataset[test_idx]
 
 print(f'Number of training graphs: {len(train_dataset)}')
 print(f'Number of test graphs: {len(test_dataset)}')
@@ -40,7 +45,9 @@ class Net(torch.nn.Module):
         self.conv1 = GCNConv(dataset.num_node_features, hidden_channels)
         self.conv2 = GCNConv(hidden_channels, hidden_channels)
         self.conv3 = GCNConv(hidden_channels, hidden_channels)
-        self.lin = nn.Linear(hidden_channels, dataset.num_classes)
+        self.lin1 = nn.Linear(hidden_channels, hidden_channels)
+        self.lin2 = nn.Linear(hidden_channels, dataset.num_classes)
+
 
     def forward(self, x, edge_index, batch):
         # 1. Obtain node embeddings 
@@ -55,13 +62,15 @@ class Net(torch.nn.Module):
 
         # 3. Apply a final classifier
         x = F.dropout(x, p=0.5, training=self.training)
-        x = self.lin(x)
+        x = self.lin1(x)
+        x = x.relu()    
+        x = self.lin2(x)
         
         return x
 
 
 model = Net(hidden_channels=64)
-optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
+optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
 criterion = torch.nn.CrossEntropyLoss()
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -71,11 +80,11 @@ def train():
     model.train()
 
     for data in train_loader:  # Iterate in batches over the training dataset.
-         out = model(data.x, data.edge_index, data.batch)  # Perform a single forward pass.
-         loss = criterion(out, data.y)  # Compute the loss.
-         loss.backward()  # Derive gradients.
-         optimizer.step()  # Update parameters based on gradients.
-         optimizer.zero_grad()  # Clear gradients.
+        out = model(data.x, data.edge_index, data.batch)  # Perform a single forward pass.
+        loss = criterion(out, data.y)  # Compute the loss.
+        loss.backward()  # Derive gradients.
+        optimizer.step()  # Update parameters based on gradients.
+        optimizer.zero_grad()  # Clear gradients.
 
 def test(loader):
      model.eval()
@@ -88,11 +97,11 @@ def test(loader):
      return correct / len(loader.dataset)  # Derive ratio of correct predictions.
 
 
-for epoch in range(1, 201):
+for epoch in range(1, 2):
     train()
     train_acc = test(train_loader)
     test_acc = test(test_loader)
-    if epoch % 20 == 0:
+    if epoch % 10 == 0:
         print(f'Epoch: {epoch:03d}, Train Acc: {train_acc:.4f}, Test Acc: {test_acc:.4f}')
 
 single_graph = dataset[5]   # get first graph object
@@ -114,14 +123,21 @@ x, edge_index = single_graph.x, single_graph.edge_index
 
 
 explainer = GNNExplainer(model, epochs=200)
-node_idx = 0
-
 # need to do the union of all the nodes to get full graph explanation...
-node_feat_mask, edge_mask = explainer.explain_node(node_idx, x, edge_index, batch=torch.zeros(single_graph.num_nodes, dtype=torch.int64))
-ax, G = explainer.visualize_subgraph(node_idx, edge_index, edge_mask, threshold=0.5) #, y=single_graph.y)
-print(node_feat_mask)
-print(edge_mask)
-plt.show()
+feat_mask_all = torch.zeros(dataset.num_features)
+edge_mask_all = torch.zeros(single_graph.num_edges)
+
+for node_idx in range(single_graph.num_nodes):
+
+    node_feat_mask, edge_mask = explainer.explain_node(node_idx, x, edge_index, batch=torch.zeros(single_graph.num_nodes, dtype=torch.int64))
+    feat_mask_all = feat_mask_all + node_feat_mask
+    edge_mask_all = edge_mask_all + edge_mask
+    # ax, G = explainer.visualize_subgraph(node_idx, edge_index, edge_mask, threshold=0.5) #, y=single_graph.y)
+feat_mask_all = feat_mask_all / single_graph.num_nodes
+edge_mask_all = edge_mask_all / single_graph.num_nodes
+print(feat_mask_all)
+print(edge_mask_all)
+# plt.show()
 
 
 # 
