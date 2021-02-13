@@ -128,6 +128,9 @@ class InvaseGNN(nn.Module):
         device - cuda or cpu
         task - train, val or test
         """
+        actor_loss_meter = AverageMeter()
+        baseline_acc_meter = AverageMeter()
+        critic_acc_meter = AverageMeter()
 
         if task == "test":
             self.eval()
@@ -136,12 +139,7 @@ class InvaseGNN(nn.Module):
             selected_nodes = []
             y_trues = []
             y_preds = []
-            critic_test_acc_meter = AverageMeter()
-            baseline_test_acc_meter = AverageMeter()
         else:
-            actor_loss_meter = AverageMeter()
-            baseline_acc_meter = AverageMeter()
-            critic_acc_meter = AverageMeter()
             if task == "val":
                 self.eval()
             elif task == "train":
@@ -153,10 +151,9 @@ class InvaseGNN(nn.Module):
             for data in generator:
                 # these are batched graphs
                 x, edge_index, batch, y_true = data.x, data.edge_index, data.batch, data.y
-                x, edge_index, batch, y_true= x.to(device), edge_index.to(device), batch.to(device), y_true.to(device)
+                x, edge_index, batch, y_true = x.to(device), edge_index.to(device), batch.to(device), y_true.to(device)
                 # prediction on full graph
                 baseline_logits = self(x, edge_index, batch, component="baseline")
-
                 baseline_loss = criterion(baseline_logits, y_true)  
 
                 # pass through selector
@@ -192,8 +189,6 @@ class InvaseGNN(nn.Module):
 
                 if task == "test":
                     # collect and analyse results
-                    critic_test_acc_meter.update(acc)
-                    baseline_test_acc_meter.update(acc)
                     x_test.append(data)
                     selected_features.append(fea_prob)
                     selected_nodes.append(node_prob)
@@ -216,7 +211,7 @@ class InvaseGNN(nn.Module):
             # print('AUC: ' + str(np.round(auc, 3)) + \
             #         ', APR: ' + str(np.round(apr, 3)) + \
             #         ', ACC: ' + str(np.round(acc, 3)))
-            return critic_test_acc_meter.avg, baseline_test_acc_meter.avg, x_test, \
+            return critic_acc_meter.avg, baseline_acc_meter.avg, x_test, \
                     selected_features, selected_nodes, y_trues, y_preds
         else:
             return actor_loss_meter.avg, critic_acc_meter.avg, baseline_acc_meter.avg
