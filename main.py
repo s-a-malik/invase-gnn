@@ -26,13 +26,14 @@ from data_processing import mutag_data
 
 def main():
 
+    # check directory structure
     os.makedirs(f"models/", exist_ok=True)
     os.makedirs("runs/", exist_ok=True)
     os.makedirs("results/", exist_ok=True)
 
     # get dataset
     if args.task == 'mutag':
-        train_dataset, val_dataset, test_dataset = mutag_data(args.seed, args.val_size, args.test_size)
+        train_dataset, val_dataset, test_dataset, test_idx = mutag_data(args.seed, args.val_size, args.test_size)
         fea_dim = train_dataset.num_features
         label_dim = train_dataset.num_classes
         train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True)
@@ -67,7 +68,7 @@ def main():
     print("--------")
     print("Critic Acc {:.3f}\t Baseline Acc {:.3f}".format(critic_test_acc, baseline_test_acc))
     print("example:", x_test[0], selected_features[0], selected_nodes[0], y_trues[0], y_preds[0])
-    results = {"test_graphs": test_dataset, "selected_features": selected_features, "selected_nodes": selected_nodes, "true_labels": y_trues, "pred_labels": y_preds}
+    results = {f"{args.task}_idx": test_idx, "selected_features": selected_features, "selected_nodes": selected_nodes, "true_labels": y_trues, "pred_labels": y_preds}
     # save results
     with open(f'results/{idx_details}.pkl', 'wb') as f:
         pkl.dump(results, f)

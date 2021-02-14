@@ -53,4 +53,4 @@ def mutag_data(seed, val_size, test_size):
     print(f'Number of val graphs: {len(val_dataset)}')
     print(f'Number of test graphs: {len(test_dataset)}')
 
-    return train_dataset, val_dataset, test_dataset
+    return train_dataset, val_dataset, test_dataset, test_idx
