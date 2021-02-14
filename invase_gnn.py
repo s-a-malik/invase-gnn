@@ -291,7 +291,7 @@ class Critic(nn.Module):
         x_selected = x[node_selection]
         batch_selected = batch[node_selection]
         out = x_selected.new_zeros(size=(batch[-1]+1, x_selected.shape[-1]))
-        out = scatter(x_selected, batch_selected, dim=0, reduce="mean", dim_size=batch.max()+1) # [batch_size, critic_h_dim]      
+        out = scatter(x_selected, batch_selected, dim=0, reduce="mean", out=out) # [batch_size, critic_h_dim]      
 
         # Apply a final classifier
         out = self.act(self.lin1(out))           # [batch_size, critic_h_dim]
