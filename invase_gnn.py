@@ -80,9 +80,7 @@ class InvaseGNN(nn.Module):
         critic_loss = -torch.sum(y_true_one_hot * torch.log(critic_out + 1e-8), dim=1)
         baseline_loss = -torch.sum(y_true_one_hot * torch.log(baseline_out + 1e-8), dim=1)
         reward = -(critic_loss - baseline_loss)
-        print(reward)
-        print(scatter(node_selection_mask * torch.log(node_pred + 1e-8) + (1 - node_selection_mask) * torch.log(1 - node_pred + 1e-8), 
-                                                batch_idx, reduce="sum"))
+
         # Policy gradient loss computation.
         # for nodes, get graphwise loss - this depends on size of graphs in batch
         custom_actor_loss = reward * scatter(node_selection_mask * torch.log(node_pred + 1e-8) + (1 - node_selection_mask) * torch.log(1 - node_pred + 1e-8), 

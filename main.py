@@ -112,7 +112,7 @@ def train(model, optimizer, idx_details, loss, device, train_generator, val_gene
                   "Critic Acc {:.3f}\t Baseline Acc {:.3f}\n"
                   "Validation : Actor Loss {:.4f}\t"
                   "Critic Acc {:.3f}\t Baseline Acc {:.3f}\n"
-                  "Prop of Nodes chosen: {:.3f}\t Prop of Features: {:3f}}".format(
+                  "Prop of Nodes chosen: {:.3f}\t Prop of Features: {:3f}\n".format(
                     epoch+1, epochs,
                     train_actor_loss, train_critic_acc, train_baseline_acc,
                     val_actor_loss, val_critic_acc, val_baseline_acc,
