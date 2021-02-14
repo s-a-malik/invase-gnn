@@ -276,9 +276,10 @@ class Critic(nn.Module):
 
         # 2. Readout layer
         # remove masked nodes
-        x = x[node_selection]
-        batch = batch[node_selection]
-        out = scatter(x, batch, dim=0, reduce="mean") # [batch_size, fea_dim]
+        x_selected = x[node_selection]
+        batch_selected = batch[node_selection]
+        # out = torch.zeros((, x.shape[-1]))
+        out = scatter(x_selected, batch_selected, dim=0, reduce="mean", dim_size=batch[-1]+1) # [batch_size, fea_dim]
         # x = global_mean_pool(x, batch)       
 
         # 3. Apply a final classifier
