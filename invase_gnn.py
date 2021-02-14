@@ -84,11 +84,11 @@ class InvaseGNN(nn.Module):
         reward = -(critic_loss - baseline_loss)
 
         # Policy gradient loss computation.
-        # for nodes, get graphwise loss - this depends on size of graphs in batch
+        # for nodes, get graphwise loss - this depends on size of each graph in batch
         custom_actor_loss = reward * scatter(node_selection_mask * torch.log(node_pred + 1e-8) + (1 - node_selection_mask) * torch.log(1 - node_pred + 1e-8), 
                                                 batch_idx, reduce="sum")
 
-        custom_actor_loss -= self.lamda1 * scatter(node_pred, batch_idx, reduce="mean") #normalise by number of graphs in batch
+        custom_actor_loss -= self.lamda1 * scatter(node_pred, batch_idx, reduce="mean") #normalise by number of nodes in graphs
         
         # add loss for features
         custom_actor_loss += \
@@ -278,8 +278,7 @@ class Critic(nn.Module):
         # remove masked nodes
         x_selected = x[node_selection]
         batch_selected = batch[node_selection]
-        # out = torch.zeros((, x.shape[-1]))
-        out = scatter(x_selected, batch_selected, dim=0, reduce="mean", dim_size=batch[-1]+1) # [batch_size, fea_dim]
+        out = scatter(x_selected, batch_selected, dim=0, reduce="mean", dim_size=batch.max()+1) # [batch_size, fea_dim]
         # x = global_mean_pool(x, batch)       
 
         # 3. Apply a final classifier

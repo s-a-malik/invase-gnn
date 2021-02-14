@@ -13,7 +13,7 @@ import torch_geometric.transforms as T
 
 # add functions from GNNExplainer to construct synthetic graphs from networkx
 
-
+# TODO synthetic task
 def syn1_data(seed=0):
     """Synthetic graph dataset 
     Task: Graph Classification - with

@@ -38,12 +38,12 @@ def main():
     train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True)
     val_loader = DataLoader(val_dataset, batch_size=args.batch_size, shuffle=True)
     test_loader = DataLoader(test_dataset, batch_size=args.batch_size, shuffle=False)
-    # TODO synthetic task
 
     # instantise model
     idx_details = f"{args.model_type}_{args.task}_r-{args.run_id}_ln-{args.node_lamda}_lf-{args.fea_lamda}_g-{args.n_layer}_s-{args.seed}"
     if args.model_type == "INVASE":
         model = InvaseGNN(fea_dim, label_dim, args.actor_h_dim, args.critic_h_dim, args.n_layer, args.node_lamda, args.fea_lamda, args.dropout)
+    # TODO other models
     # elif args.model_type == "GAT":
     #     model = GAT()
     else:
@@ -69,9 +69,7 @@ def main():
     # save results
     with open(f'results/{idx_details}.pkl', 'wb') as f:
         pkl.dump(results, f)
-    
-
-
+    print(f"saved results to results/{idx_details}.pkl")
 
 def train(model, optimizer, idx_details, loss, device, train_generator, val_generator, epochs):
     """Main training function (universal)
@@ -112,7 +110,7 @@ def train(model, optimizer, idx_details, loss, device, train_generator, val_gene
                     device=device,
                     task="val"
                 )
-            # print actor, critic and baseline accuracy as in INVASE
+            # print actor, critic and baseline accuracies
             if epoch % 10 == 0:
                 print("Epoch: [{}/{}]\n"
                   "Train      : Actor Loss {:.4f}\t"
