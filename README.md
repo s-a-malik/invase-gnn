@@ -9,7 +9,9 @@ the following applications on graph input data.
 -   Prediction with instance-wise feature and node selection
 
 To run the pipeline for training and evaluation on INVASE-GNN framwork on the MUTAG dataset,
-simply run python main.py. Experiment and model hyperparameters can be adjusted using command line flags. 
+simply run `python main.py`. Experiment and model hyperparameters can be adjusted using command line flags. All code is in PyTorch, with GNNs implemented with [PyTorch Geometric](https://github.com/rusty1s/pytorch_geometric)
+
+In addition, GNNExplainer.py contains an example of the post-hoc graph explanation approach introduced in [GNNExplainer](https://arxiv.org/abs/1903.03894). 
 
 ## Example Usage
 
