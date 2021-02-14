@@ -162,10 +162,10 @@ class InvaseGNN(nn.Module):
                 # mask out features
                 subgraph_x = x * fea_selection_mask[batch]  # keep all the nodes
                 subgraph_edge_index, _ = subgraph(node_selection, edge_index)  # returning only the edges of the subgraph
-                # TODO this still pools all the nodes, need to remove unwanted nodes from global pooling.
-                critic_logits = self([subgraph_x, node_selection], subgraph_edge_index, batch, component="critic")    
-                
+
+                critic_logits = self([subgraph_x, node_selection], subgraph_edge_index, batch, component="critic")       
                 critic_loss = criterion(critic_logits, y_true)  
+                
                 actor_loss = self.actor_loss(node_selection_mask.clone().detach(), 
                                             fea_selection_mask.clone().detach(),
                                             batch.clone().detach(),

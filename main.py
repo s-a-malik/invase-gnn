@@ -67,7 +67,7 @@ def main():
     print("--------")
     print("Critic Acc {:.3f}\t Baseline Acc {:.3f}".format(critic_test_acc, baseline_test_acc))
     print("example:", x_test[0], selected_features[0], selected_nodes[0], y_trues[0], y_preds[0])
-    results = x_test, selected_features, selected_nodes, y_trues, y_preds
+    results = {"test_graphs": test_dataset, "selected_features": selected_features, "selected_nodes": selected_nodes, "true_labels": y_trues, "pred_labels": y_preds}
     # save results
     with open(f'results/{idx_details}.pkl', 'wb') as f:
         pkl.dump(results, f)
