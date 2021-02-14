@@ -2,9 +2,6 @@
 """
 
 # import packages
-import os.path as osp
-
-import numpy as np
 from sklearn.model_selection import train_test_split as split
 
 from torch_geometric.datasets import TUDataset
@@ -32,7 +29,7 @@ def load_data(task, seed, val_size, test_size):
     - test_dataset: PyG dataset
     - test_idx: indices of the original dataset used for testing - to recover original data.
     """
-    path = osp.join(osp.dirname(osp.realpath(__file__)), 'data', 'TUDataset')
+    path = "../data/TUDataset"
     
     if task == 'mutag':
         dataset = 'Mutagenicity'

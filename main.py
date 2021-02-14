@@ -20,14 +20,14 @@ from torch.optim import Adam
 from torch_geometric.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 
-from invase_gnn import InvaseGNN
-from utils import save_checkpoint, load_previous_state
-from data_processing import load_data
+from invase_gnn.invase_gnn import InvaseGNN
+from invase_gnn.utils import save_checkpoint, load_previous_state
+from invase_gnn.data_processing import load_data
 
 def main():
     # check directory structure
-    os.makedirs(f"models/", exist_ok=True)
-    os.makedirs("runs/", exist_ok=True)
+    os.makedirs("models/", exist_ok=True)
+    os.makedirs("logs/", exist_ok=True)
     os.makedirs("results/", exist_ok=True)
 
     # get dataset

@@ -17,7 +17,7 @@ from torch_scatter import scatter
 from torch_geometric.nn import GCNConv, global_mean_pool
 from torch_geometric.utils import subgraph
 
-from utils import AverageMeter
+from invase_gnn.utils import AverageMeter
 
 class InvaseGNN(nn.Module):
     """Main INVASE-GNN model class
