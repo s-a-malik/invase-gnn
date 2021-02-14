@@ -27,7 +27,6 @@ class InvaseGNN(nn.Module):
     - activation: activation function of models
     """
     def __init__(self, fea_dim, label_dim, actor_h_dim, critic_h_dim, n_layer, node_lamda, fea_lamda):
-
         super(InvaseGNN, self).__init__()
         
         self.actor_h_dim = actor_h_dim
