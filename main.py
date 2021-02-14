@@ -62,7 +62,6 @@ def main():
     print("TEST")
     print("--------")
     print("Critic Acc {:.3f}\t Baseline Acc {:.3f}".format(critic_test_acc, baseline_test_acc))
-
     print("example:", x_test[0], selected_features[0], selected_nodes[0], y_trues[0], y_preds[0])
 
 

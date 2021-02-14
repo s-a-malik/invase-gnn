@@ -69,7 +69,7 @@ class InvaseGNN(nn.Module):
         subgraph_x = x * fea_selection_mask[batch]  # keep all the nodes
         subgraph_edge_index, _ = subgraph(node_selection, edge_index)  # returning only the edges of the subgraph
         # Prediction
-        y_hat = self.critic(subgraph_x, subgraph_edge_index, batch)
+        y_hat = self.critic([subgraph_x, node_selection], subgraph_edge_index, batch)
         # unnormalised - need to softmax
         return y_hat
 
@@ -188,11 +188,11 @@ class InvaseGNN(nn.Module):
 
                 if task == "test":
                     # collect and analyse results
-                    x_test += data
-                    selected_features += fea_prob
-                    selected_nodes += node_prob
-                    y_trues += y_true
-                    y_preds += critic_preds
+                    x_test += data.to_data_list()
+                    selected_features.append(fea_prob.detach().cpu().numpy())
+                    selected_nodes.append(node_prob.detach().cpu().numpy())
+                    y_trues.append(y_true.detach().cpu().numpy())
+                    y_preds.append(critic_preds.detach().cpu().numpy())
 
                 else:
 
@@ -211,7 +211,7 @@ class InvaseGNN(nn.Module):
             #         ', APR: ' + str(np.round(apr, 3)) + \
             #         ', ACC: ' + str(np.round(acc, 3)))
             return critic_acc_meter.avg, baseline_acc_meter.avg, x_test, \
-                    selected_features, selected_nodes, y_trues, y_preds
+                    np.concatenate(selected_features, axis=0), selected_nodes, np.concatenate(y_trues), np.concatenate(y_preds)
         else:
             return actor_loss_meter.avg, critic_acc_meter.avg, baseline_acc_meter.avg, prop_of_feas.avg, prop_of_nodes.avg
 
@@ -267,13 +267,13 @@ class Critic(nn.Module):
         # remove masked nodes
         x = x[node_selection]
         batch = batch[node_selection]
-        x = scatter(x, batch, reduce="mean") # [batch_size, fea_dim]
+        out = scatter(x, batch, dim=0, reduce="mean") # [batch_size, fea_dim]
         # x = global_mean_pool(x, batch)       
 
         # 3. Apply a final classifier
-        x = self.act(self.lin1(x))           # [batch_size, critic_h_dim]
-        x = self.lin2(x)                     # [batch_size, label_dim]
-        return x
+        out = self.act(self.lin1(out))           # [batch_size, critic_h_dim]
+        out = self.lin2(out)                     # [batch_size, label_dim]
+        return out
 
 class Baseline(nn.Module):
     def __init__(self, fea_dim, n_layer, critic_h_dim, label_dim):
