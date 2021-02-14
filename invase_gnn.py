@@ -145,14 +145,19 @@ class InvaseGNN(nn.Module):
         with trange(len(generator)) as t:
             for data in generator:
                 # these are batched graphs
+                orig = data.clone()
                 x, edge_index, batch, y_true = data.x, data.edge_index, data.batch, data.y
                 x, edge_index, batch, y_true = x.to(device), edge_index.to(device), batch.to(device), y_true.to(device)
+                # print(x.shape, edge_index.shape, batch.shape, y_true.shape)
+                # print(x)
                 # prediction on full graph
                 baseline_logits = self(x, edge_index, batch, component="baseline")
+                # print(baseline_logits)
                 baseline_loss = criterion(baseline_logits, y_true)  
 
                 # pass through selector
                 node_prob, fea_prob = self(x, edge_index, batch, component="actor")
+                # print(fea_prob)
                 # Sampling the features based on the selection_probability
                 node_selection_mask = torch.bernoulli(node_prob)       
                 node_selection = torch.squeeze(torch.nonzero(node_selection_mask, as_tuple=False))
@@ -164,6 +169,7 @@ class InvaseGNN(nn.Module):
                 subgraph_edge_index, _ = subgraph(node_selection, edge_index)  # returning only the edges of the subgraph
 
                 critic_logits = self([subgraph_x, node_selection], subgraph_edge_index, batch, component="critic")       
+                # print(critic_logits.shape, y_true.shape)
                 critic_loss = criterion(critic_logits, y_true)  
                 
                 actor_loss = self.actor_loss(node_selection_mask.clone().detach(), 
@@ -188,7 +194,7 @@ class InvaseGNN(nn.Module):
 
                 if task == "test":
                     # collect and analyse results
-                    x_test += data.to_data_list()
+                    x_test += orig.to_data_list()
                     selected_features.append(fea_prob.detach().cpu().numpy())
                     
                     # need to change to batchwise

@@ -22,7 +22,7 @@ from torch.utils.tensorboard import SummaryWriter
 
 from invase_gnn import InvaseGNN
 from utils import save_checkpoint, load_previous_state
-from data_processing import mutag_data
+from data_processing import load_data
 
 def main():
 
@@ -32,23 +32,20 @@ def main():
     os.makedirs("results/", exist_ok=True)
 
     # get dataset
-    if args.task == 'mutag':
-        train_dataset, val_dataset, test_dataset, test_idx = mutag_data(args.seed, args.val_size, args.test_size)
-        fea_dim = train_dataset.num_features
-        label_dim = train_dataset.num_classes
-        train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True)
-        val_loader = DataLoader(val_dataset, batch_size=args.batch_size, shuffle=True)
-        test_loader = DataLoader(test_dataset, batch_size=args.batch_size, shuffle=False)
+    train_dataset, val_dataset, test_dataset, test_idx = load_data(args.task, args.seed, args.val_size, args.test_size)
+    fea_dim = train_dataset.num_features
+    label_dim = train_dataset.num_classes
+    train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True)
+    val_loader = DataLoader(val_dataset, batch_size=args.batch_size, shuffle=True)
+    test_loader = DataLoader(test_dataset, batch_size=args.batch_size, shuffle=False)
     # TODO synthetic task
-    else:
-         NameError(f"task {args.task} not allowed")
 
     # instantise model
     idx_details = f"{args.model_type}_{args.task}_r-{args.run_id}_ln-{args.node_lamda}_lf-{args.fea_lamda}_g-{args.n_layer}_s-{args.seed}"
     if args.model_type == "INVASE":
         model = InvaseGNN(fea_dim, label_dim, args.actor_h_dim, args.critic_h_dim, args.n_layer, args.node_lamda, args.fea_lamda)
-    elif args.model_type == "GAT":
-        model = GAT()
+    # elif args.model_type == "GAT":
+    #     model = GAT()
     else:
         NameError(f"model type {args.model_type} not allowed")
     model.to(args.device)

@@ -22,18 +22,26 @@ def syn1_data(seed=0):
     dataset - PyG dataset
     """
 
-def mutag_data(seed, val_size, test_size):
-    """Load the mutagenicity dataset 
+def load_data(task, seed, val_size, test_size):
+    """Load dataset
     Task: Graph Classification - dataset of various graphs we want to classify
-
-    Returns:
-    train_dataset - PyG dataloader
-    test_dataset- PyG dataset
+    
     """
-    dataset = 'Mutagenicity'
-    # dataset = 'MUTAG'
     path = osp.join(osp.dirname(osp.realpath(__file__)), 'data', 'TUDataset')
-    dataset = TUDataset(path, dataset, transform=T.NormalizeFeatures(), cleaned=True)
+    
+    if task == 'mutag':
+        dataset = 'Mutagenicity'
+        dataset = TUDataset(path, dataset, transform=T.NormalizeFeatures(), cleaned=True)
+    elif task == 'reddit':
+        dataset = 'REDDIT-BINARY'
+        dataset = TUDataset(path, dataset, cleaned=True)
+    elif task == 'enzymes':
+        dataset = 'ENZYMES'
+        dataset = TUDataset(path, dataset, transform=T.NormalizeFeatures(), cleaned=True)
+    else:
+         NameError(f"task {args.task} not allowed")
+    
+    # 
     print(f'Dataset: {dataset}:')
     print('====================')
     print(f'Number of graphs: {len(dataset)}')
