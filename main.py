@@ -56,9 +56,9 @@ def main():
     # evaluate on test set
     critic_test_acc, baseline_test_acc, x_test, \
                     selected_features, selected_nodes, y_trues, y_preds = model.evaluate(test_loader, loss, optimizer, args.device, task="test")
-    # get summary results on selected features. 
+    # get summary results on selected features
     
-    # save results
+    # TODO save results
     print("TEST")
     print("--------")
     print("Critic Acc {:.3f}\t Baseline Acc {:.3f}".format(critic_test_acc, baseline_test_acc))

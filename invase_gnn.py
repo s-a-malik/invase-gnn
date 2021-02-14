@@ -162,7 +162,8 @@ class InvaseGNN(nn.Module):
                 # mask out features
                 subgraph_x = x * fea_selection_mask[batch]  # keep all the nodes
                 subgraph_edge_index, _ = subgraph(node_selection, edge_index)  # returning only the edges of the subgraph
-                critic_logits = self(subgraph_x, subgraph_edge_index, batch, component="critic")
+                # TODO this still pools all the nodes, need to remove unwanted nodes from global pooling.
+                critic_logits = self([subgraph_x, node_selection], subgraph_edge_index, batch, component="critic")    
                 
                 critic_loss = criterion(critic_logits, y_true)  
                 actor_loss = self.actor_loss(node_selection_mask.clone().detach(), 
@@ -254,14 +255,20 @@ class Critic(nn.Module):
         self.lin2 = nn.Linear(critic_h_dim, label_dim)
         self.act = nn.ReLU()
 
-    def forward(self, x, edge_index, batch):
+    def forward(self, x_comb, edge_index, batch):
+        
+        x, node_selection = x_comb
         # graph convolutions
         for graph_func in self.convs:
             x = graph_func(x, edge_index)
             x = self.act(x)
 
         # 2. Readout layer
-        x = global_mean_pool(x, batch)       # [batch_size, fea_dim]
+        # remove masked nodes
+        x = x[node_selection]
+        batch = batch[node_selection]
+        x = scatter(x, batch, reduce="mean") # [batch_size, fea_dim]
+        # x = global_mean_pool(x, batch)       
 
         # 3. Apply a final classifier
         x = self.act(self.lin1(x))           # [batch_size, critic_h_dim]
