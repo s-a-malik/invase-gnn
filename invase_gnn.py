@@ -234,7 +234,7 @@ class Actor(nn.Module):
         for layer in range(n_layer - 1):
             self.convs.append(GCNConv(actor_h_dim, actor_h_dim))
         self.fea_lin1 = nn.Linear(actor_h_dim, actor_h_dim)
-        self.fea_lin2 = nn.Linear(actor_h_dim, label_dim)
+        self.fea_lin2 = nn.Linear(actor_h_dim, fea_dim)
         self.node_lin = nn.Linear(actor_h_dim, 1)
 
         # self.convs = nn.ModuleList(
