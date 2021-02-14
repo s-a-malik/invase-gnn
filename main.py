@@ -37,7 +37,7 @@ def main():
          NameError(f"task {args.task} not allowed")
 
     # instantise model
-    idx_details = f"{args.model_type}_{args.task}_r-{args.run_id}_ln-{args.node_lamda}_lf-{args.fea_lamda}_g-{args.n_layer}_t-{args.conv_type}_s-{args.seed}"
+    idx_details = f"{args.model_type}_{args.task}_r-{args.run_id}_ln-{args.node_lamda}_lf-{args.fea_lamda}_g-{args.n_layer}_s-{args.seed}"
     if args.model_type == "INVASE":
         model = InvaseGNN(fea_dim, label_dim, args.actor_h_dim, args.critic_h_dim, args.n_layer, args.node_lamda, args.fea_lamda)
     elif args.model_type == "GAT":
