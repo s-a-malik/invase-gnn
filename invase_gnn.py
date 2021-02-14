@@ -190,7 +190,10 @@ class InvaseGNN(nn.Module):
                     # collect and analyse results
                     x_test += data.to_data_list()
                     selected_features.append(fea_prob.detach().cpu().numpy())
-                    selected_nodes.append(node_prob.detach().cpu().numpy())
+                    
+                    # need to change to batchwise
+                    node_prob = node_prob.detach().cpu().numpy()
+                    selected_nodes += [[x for j, x in enumerate(node_prob) if batch[j] == i] for i in range(len(y_true))]
                     y_trues.append(y_true.detach().cpu().numpy())
                     y_preds.append(critic_preds.detach().cpu().numpy())
 
