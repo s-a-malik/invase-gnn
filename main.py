@@ -174,13 +174,13 @@ def input_parser():
     parser.add_argument('--node-lamda',
                         type=float,
                         nargs='?',
-                        default=0.1,
+                        default=0.01,
                         help='INVASE hyperparameter for nodes')
 
     parser.add_argument('--fea-lamda',
                         type=float,
                         nargs='?',
-                        default=0.1,
+                        default=0.01,
                         help='INVASE hyperparameter for features')
 
     parser.add_argument('--dropout',
