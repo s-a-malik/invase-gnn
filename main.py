@@ -64,7 +64,8 @@ def main():
     print("TEST")
     print("--------")
     print("Critic Acc {:.3f}\t Baseline Acc {:.3f}".format(critic_test_acc, baseline_test_acc))
-    print("example:", x_test[0], selected_features[0], selected_nodes[0], y_trues[0], y_preds[0])
+    print("average feature importance:", np.mean(selected_features, axis=0))
+    print("example (first test graph):", x_test[0], selected_features[0], selected_nodes[0], y_trues[0], y_preds[0])
     results = {f"{args.task}_idx": test_idx, "selected_features": selected_features, "selected_nodes": selected_nodes, "true_labels": y_trues, "pred_labels": y_preds}
     # save results
     with open(f'results/{idx_details}.pkl', 'wb') as f:
