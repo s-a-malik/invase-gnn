@@ -5,9 +5,11 @@
 (3) Evaluate on ground truth and prediction
 """
 
+import os
 import sys
 import argparse
 import datetime
+import pickle as pkl
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -23,6 +25,10 @@ from utils import save_checkpoint, load_previous_state
 from data_processing import mutag_data
 
 def main():
+
+    os.makedirs(f"models/", exist_ok=True)
+    os.makedirs("runs/", exist_ok=True)
+    os.makedirs("results/", exist_ok=True)
 
     # get dataset
     if args.task == 'mutag':
@@ -57,12 +63,16 @@ def main():
     critic_test_acc, baseline_test_acc, x_test, \
                     selected_features, selected_nodes, y_trues, y_preds = model.evaluate(test_loader, loss, optimizer, args.device, task="test")
     # get summary results on selected features
-    
-    # TODO save results
     print("TEST")
     print("--------")
     print("Critic Acc {:.3f}\t Baseline Acc {:.3f}".format(critic_test_acc, baseline_test_acc))
     print("example:", x_test[0], selected_features[0], selected_nodes[0], y_trues[0], y_preds[0])
+    results = x_test, selected_features, selected_nodes, y_trues, y_preds
+    # save results
+    with open(f'results/{idx_details}.pkl', 'wb') as f:
+        pkl.dump(results, f)
+    
+
 
 
 def train(model, optimizer, idx_details, loss, device, train_generator, val_generator, epochs):
