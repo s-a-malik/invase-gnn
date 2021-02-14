@@ -85,8 +85,7 @@ class InvaseGNN(nn.Module):
         print(scatter(node_selection_mask * torch.log(node_pred + 1e-8) + (1 - node_selection_mask) * torch.log(1 - node_pred + 1e-8), 
                                                 batch_idx, reduce="sum"))
         # Policy gradient loss computation.
-        # for nodes
-        # get graphwise loss - this depends on size of graphs in batch
+        # for nodes, get graphwise loss - this depends on size of graphs in batch
         custom_actor_loss = reward * scatter(node_selection_mask * torch.log(node_pred + 1e-8) + (1 - node_selection_mask) * torch.log(1 - node_pred + 1e-8), 
                                                 batch_idx, reduce="sum")
 
@@ -128,6 +127,8 @@ class InvaseGNN(nn.Module):
         actor_loss_meter = AverageMeter()
         baseline_acc_meter = AverageMeter()
         critic_acc_meter = AverageMeter()
+        prop_of_nodes = AverageMeter()
+        prop_of_feas = AverageMeter()
 
         if task == "test":
             self.eval()
@@ -183,6 +184,9 @@ class InvaseGNN(nn.Module):
                 baseline_preds = torch.argmax(baseline_logits, dim=1)
                 baseline_acc = torch.sum(baseline_preds==y_true).float() / y_true.size(0)
                 baseline_acc_meter.update(baseline_acc)
+                
+                prop_of_feas.update(torch.mean(torch.mean(fea_selection_mask, dim=-1)), y_true.size(0))
+                prop_of_nodes.update(torch.mean(node_selection_mask), y_true.size(0))
 
                 if task == "test":
                     # collect and analyse results
@@ -211,7 +215,7 @@ class InvaseGNN(nn.Module):
             return critic_acc_meter.avg, baseline_acc_meter.avg, x_test, \
                     selected_features, selected_nodes, y_trues, y_preds
         else:
-            return actor_loss_meter.avg, critic_acc_meter.avg, baseline_acc_meter.avg
+            return actor_loss_meter.avg, critic_acc_meter.avg, baseline_acc_meter.avg, prop_of_feas.avg, prop_of_nodes.avg
 
 
 class Actor(nn.Module):

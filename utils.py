@@ -103,3 +103,20 @@ def save_checkpoint(state, is_best, checkpoint="checkpoint.pth.tar", best="best.
     torch.save(state, checkpoint)
     if is_best:
         shutil.copyfile(checkpoint, best)
+
+
+def load_previous_state(path, model, device, optimizer=None):
+    """Loads saved state 
+    """
+    assert os.path.isfile(path), "no checkpoint found at '{}'".format(path)
+
+    checkpoint = torch.load(path, map_location=device)
+    start_epoch = checkpoint["epoch"]
+    best_acc = checkpoint["best_acc"]
+    saved_args = checkpoint["args"]
+    model.load_state_dict(checkpoint["state_dict"])
+    if optimizer:
+        optimizer.load_state_dict(checkpoint["optimizer"])
+    print("Loaded '{}'".format(path))
+
+    return model, optimizer, best_acc, start_epoch, saved_args

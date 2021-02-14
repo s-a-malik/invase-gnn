@@ -2,7 +2,7 @@
 
 (1) Data generation
 (2) Train INVASE-GNN
-(3) Evaluate INVASE on ground truth and prediction
+(3) Evaluate on ground truth and prediction
 """
 
 import sys
@@ -19,7 +19,7 @@ from torch_geometric.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 
 from invase_gnn import InvaseGNN
-from utils import save_checkpoint
+from utils import save_checkpoint, load_previous_state
 from data_processing import mutag_data
 
 def main():
@@ -32,22 +32,32 @@ def main():
         train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True)
         val_loader = DataLoader(val_dataset, batch_size=args.batch_size, shuffle=True)
         test_loader = DataLoader(test_dataset, batch_size=args.batch_size, shuffle=False)
+    # TODO synthetic task
     else:
          NameError(f"task {args.task} not allowed")
 
     # instantise model
-    idx_details = f"{args.task}_r-{args.run_id}_l-{args.lamda}_g-{args.n_layer}_t-{args.conv_type}_s-{args.seed}"
-    model = InvaseGNN(fea_dim, label_dim, args.actor_h_dim, args.critic_h_dim, args.n_layer, args.lamda)
+    idx_details = f"{args.model_type}_{args.task}_r-{args.run_id}_l-{args.lamda}_g-{args.n_layer}_t-{args.conv_type}_s-{args.seed}"
+    if args.model_type == "INVASE":
+        model = InvaseGNN(fea_dim, label_dim, args.actor_h_dim, args.critic_h_dim, args.n_layer, args.lamda)
+    elif args.model_type == "GAT":
+        model = GAT()
+    else:
+        NameError(f"model type {args.model_type} not allowed")
     model.to(args.device)
     # train
     loss = nn.CrossEntropyLoss()
     optimizer = Adam(model.parameters(), lr=args.learning_rate, weight_decay=args.l2)
-    train(model, optimizer, idx_details, loss, args.device, train_loader, val_loader, args.epochs)
+
+    if not args.evaluate:
+        train(model, optimizer, idx_details, loss, args.device, train_loader, val_loader, args.epochs)
     
+    model, _, _, _, saved_args = load_previous_state(f"models/checkpoint_{idx_details}.pth.tar", model, args.device, optimizer)
     # evaluate on test set
     critic_test_acc, baseline_test_acc, x_test, \
                     selected_features, selected_nodes, y_trues, y_preds = model.evaluate(test_loader, loss, optimizer, args.device, task="test")
-
+    # get summary results on selected features. 
+    
     # save results
     print("TEST")
     print("--------")
@@ -64,7 +74,7 @@ def train(model, optimizer, idx_details, loss, device, train_generator, val_gene
     checkpoint_file = f"models/checkpoint_{idx_details}.pth.tar"
     best_file = f"models/best_{idx_details}.pth.tar"
 
-    _, best_critic_acc, _ = model.evaluate(
+    _, best_critic_acc, _, _, _ = model.evaluate(
         generator=val_generator,
         criterion=loss,
         optimizer=None,
@@ -75,7 +85,8 @@ def train(model, optimizer, idx_details, loss, device, train_generator, val_gene
     try:
         for epoch in range(epochs):
             # Training
-            train_actor_loss, train_critic_acc, train_baseline_acc = model.evaluate(
+            train_actor_loss, train_critic_acc, train_baseline_acc, \
+                train_prop_of_feas, train_prop_of_nodes = model.evaluate(
                 generator=train_generator,
                 criterion=loss,
                 optimizer=optimizer,
@@ -86,7 +97,8 @@ def train(model, optimizer, idx_details, loss, device, train_generator, val_gene
             # Validation
             with torch.no_grad():
                 # evaluate on validation set
-                val_actor_loss, val_critic_acc, val_baseline_acc  = model.evaluate(
+                val_actor_loss, val_critic_acc, val_baseline_acc, \
+                    val_prop_of_feas, val_prop_of_nodes  = model.evaluate(
                     generator=val_generator,
                     criterion=loss,
                     optimizer=None,
@@ -99,10 +111,12 @@ def train(model, optimizer, idx_details, loss, device, train_generator, val_gene
                   "Train      : Actor Loss {:.4f}\t"
                   "Critic Acc {:.3f}\t Baseline Acc {:.3f}\n"
                   "Validation : Actor Loss {:.4f}\t"
-                  "Critic Acc {:.3f}\t Baseline Acc {:.3f}\n".format(
+                  "Critic Acc {:.3f}\t Baseline Acc {:.3f}\n
+                  "Prop of Nodes chosen: {:.3f}\t Prop of Features: {:3f}}".format(
                     epoch+1, epochs,
                     train_actor_loss, train_critic_acc, train_baseline_acc,
-                    val_actor_loss, val_critic_acc, val_baseline_acc))
+                    val_actor_loss, val_critic_acc, val_baseline_acc,
+                    val_prop_of_nodes, val_prop_of_feas))
 
             # save model
             is_best = val_critic_acc < best_critic_acc
@@ -114,34 +128,28 @@ def train(model, optimizer, idx_details, loss, device, train_generator, val_gene
                 "epoch": epoch,
                 "state_dict": model.state_dict(),
                 "best_acc": best_critic_acc,
-                "optimizer": optimizer.state_dict()
+                "optimizer": optimizer.state_dict(),
+                "args": args
             }
             save_checkpoint(checkpoint_dict,
                 is_best,
                 checkpoint_file,
                 best_file)
 
-            # write actor, critic and baseline loss/accuracy
+            # write metrics to tensorboard
             writer.add_scalar("actor_loss/train", train_actor_loss, epoch+1)
             writer.add_scalar("critic_acc/train", train_critic_acc, epoch+1)
             writer.add_scalar("baseline_acc/train", train_baseline_acc, epoch+1)
+            writer.add_scalar("prop_of_feas/training", train_prop_of_feas, epoch+1)
+            writer.add_scalar("prop_of_nodes/training", train_prop_of_nodes, epoch+1)
             writer.add_scalar("actor_loss/validation", val_actor_loss, epoch+1)
             writer.add_scalar("critic_acc/validation", val_critic_acc, epoch+1)
             writer.add_scalar("baseline_acc/validation", val_baseline_acc, epoch+1)
+            writer.add_scalar("prop_of_feas/validation", val_prop_of_feas, epoch+1)
+            writer.add_scalar("prop_of_nodes/validation", val_prop_of_nodes, epoch+1)
 
     except KeyboardInterrupt:
         pass
-
-# def test():
-
-#     # initantise the model
-
-#     # load state
-#     checkpoint = torch.load(model_path, map_location=device)
-#     model.load_state_dict(checkpoint["state_dict"])
-#     # eval
-#     test_acc, test_x, y_true, y_pred = model.evaluate(test_generator, loss, optimiser, device, task="test")
-#     print(test_acc, y_true[:10], y_pred[:10])
 
 
 def input_parser():
@@ -171,12 +179,12 @@ def input_parser():
 
     parser.add_argument('--actor-h-dim',
                         help='hidden state dimensions for actor',
-                        default=100,
+                        default=128,
                         type=int)
 
     parser.add_argument('--critic-h-dim',
                         help='hidden state dimensions for critic',
-                        default=200,
+                        default=256,
                         type=int)
 
     parser.add_argument('--n-layer',
@@ -185,14 +193,14 @@ def input_parser():
                         default=3,
                         help='Number of Graph Convolution layers')
 
-    parser.add_argument('--conv-type',
+    parser.add_argument('--model-type',
                         type=str,
                         nargs='?',
-                        default='GCN',
-                        help='Type of Graph Convolution layers')
+                        default='INVASE',
+                        help='Type of model to evaluate (INVASE, GAT)')
 
     parser.add_argument("--batch-size", "--bsize",
-                        default=32,
+                        default=128,
                         type=int,
                         metavar="N",
                         help="mini-batch size (default: 256)")
@@ -233,7 +241,7 @@ def input_parser():
                         help="choose an optimizer; SGD, Adam")
 
     parser.add_argument("--learning-rate", "--lr",
-                        default=0.0001,
+                        default=0.001,
                         type=float,
                         metavar="float",
                         help="initial learning rate (default: 1e-4)")
@@ -249,6 +257,10 @@ def input_parser():
                         type=int,
                         metavar="N",
                         help="experiment id")
+
+    parser.add_argument("--evaluate",
+                        action="store_true",
+                        help="DSkip training and just evaluate on test set")
 
     parser.add_argument("--disable-cuda",
                         action="store_true",
