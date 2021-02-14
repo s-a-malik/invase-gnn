@@ -1,4 +1,4 @@
-"""Example using GNNExplainer
+""" Basic Example using GNNExplainer
 """
 
 import os.path as osp
@@ -97,14 +97,14 @@ def test(loader):
      return correct / len(loader.dataset)  # Derive ratio of correct predictions.
 
 
-for epoch in range(1, 201):
+for epoch in range(1, 20):
     train()
     train_acc = test(train_loader)
     test_acc = test(test_loader)
     if epoch % 10 == 0:
         print(f'Epoch: {epoch:03d}, Train Acc: {train_acc:.4f}, Test Acc: {test_acc:.4f}')
 
-single_graph = dataset[5]   # get first graph object
+single_graph = dataset[0]   # get first graph object
 print(single_graph)
 print('=============================================================')
 
@@ -119,25 +119,19 @@ print(f'Is undirected: {single_graph.is_undirected()}')
 
 single_graph = single_graph.to(device)
 x, edge_index = single_graph.x, single_graph.edge_index
-# print(x, edge_index)
 
 
+# explain a node
 explainer = GNNExplainer(model, epochs=200)
 # need to do the union of all the nodes to get full graph explanation...
 feat_mask_all = torch.zeros(dataset.num_features)
 edge_mask_all = torch.zeros(single_graph.num_edges)
 
-for node_idx in range(single_graph.num_nodes):
+node_idx = 0
+node_feat_mask, edge_mask = explainer.explain_node(node_idx, x, edge_index, batch=torch.zeros(single_graph.num_nodes, dtype=torch.int64))
 
-    node_feat_mask, edge_mask = explainer.explain_node(node_idx, x, edge_index, batch=torch.zeros(single_graph.num_nodes, dtype=torch.int64))
-    feat_mask_all = feat_mask_all + node_feat_mask
-    edge_mask_all = edge_mask_all + edge_mask
-    # ax, G = explainer.visualize_subgraph(node_idx, edge_index, edge_mask, threshold=0.5) #, y=single_graph.y)
-feat_mask_all = feat_mask_all / single_graph.num_nodes
-edge_mask_all = edge_mask_all / single_graph.num_nodes
-print(feat_mask_all)
-print(edge_mask_all)
-# plt.show()
+ax, G = explainer.visualize_subgraph(node_idx, edge_index, edge_mask, threshold=0.5) #, y=single_graph.y)
+plt.show()
 
 
 # 

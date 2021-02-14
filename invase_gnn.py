@@ -12,9 +12,10 @@ import numpy as np
 import torch
 import torch.nn as nn
 from torch_scatter import scatter
-
+import torch.nn.functional as F
 from torch_geometric.nn import GCNConv, global_mean_pool
 from torch_geometric.utils import subgraph
+
 from utils import AverageMeter, prediction_performance_metric, feature_performance_metric
 
 class InvaseGNN(nn.Module):
@@ -26,7 +27,7 @@ class InvaseGNN(nn.Module):
     - n_layer: the number of graph conv layers
     - activation: activation function of models
     """
-    def __init__(self, fea_dim, label_dim, actor_h_dim, critic_h_dim, n_layer, node_lamda, fea_lamda):
+    def __init__(self, fea_dim, label_dim, actor_h_dim, critic_h_dim, n_layer, node_lamda, fea_lamda, dropout):
         super(InvaseGNN, self).__init__()
         
         self.actor_h_dim = actor_h_dim
@@ -36,10 +37,11 @@ class InvaseGNN(nn.Module):
         self.label_dim = label_dim
         self.lamda1 = node_lamda
         self.lamda2 = fea_lamda
+        self.dropout = dropout
 
-        self.actor = Actor(self.fea_dim, self.n_layer, self.actor_h_dim)
-        self.critic = Critic(self.fea_dim, self.n_layer, self.critic_h_dim, self.label_dim)
-        self.baseline = Baseline(self.fea_dim, self.n_layer, self.critic_h_dim, self.label_dim)
+        self.actor = Actor(self.fea_dim, self.n_layer, self.actor_h_dim, self.dropout)
+        self.critic = Critic(self.fea_dim, self.n_layer, self.critic_h_dim, self.label_dim, self.dropout)
+        self.baseline = Baseline(self.fea_dim, self.n_layer, self.critic_h_dim, self.label_dim, self.dropout)
         self.softmax = nn.Softmax(dim=-1)
 
     def forward(self, x, edge_index, batch, component="actor"):
@@ -148,8 +150,6 @@ class InvaseGNN(nn.Module):
                 orig = data.clone()
                 x, edge_index, batch, y_true = data.x, data.edge_index, data.batch, data.y
                 x, edge_index, batch, y_true = x.to(device), edge_index.to(device), batch.to(device), y_true.to(device)
-                # print(x.shape, edge_index.shape, batch.shape, y_true.shape)
-                # print(x)
                 # prediction on full graph
                 baseline_logits = self(x, edge_index, batch, component="baseline")
                 # print(baseline_logits)
@@ -157,7 +157,6 @@ class InvaseGNN(nn.Module):
 
                 # pass through selector
                 node_prob, fea_prob = self(x, edge_index, batch, component="actor")
-                # print(fea_prob)
                 # Sampling the features based on the selection_probability
                 node_selection_mask = torch.bernoulli(node_prob)       
                 node_selection = torch.squeeze(torch.nonzero(node_selection_mask, as_tuple=False))
@@ -168,8 +167,7 @@ class InvaseGNN(nn.Module):
                 subgraph_x = x * fea_selection_mask[batch]  # keep all the nodes
                 subgraph_edge_index, _ = subgraph(node_selection, edge_index)  # returning only the edges of the subgraph
 
-                critic_logits = self([subgraph_x, node_selection], subgraph_edge_index, batch, component="critic")       
-                # print(critic_logits.shape, y_true.shape)
+                critic_logits = self([subgraph_x, node_selection], subgraph_edge_index, batch, component="critic")
                 critic_loss = criterion(critic_logits, y_true)  
                 
                 actor_loss = self.actor_loss(node_selection_mask.clone().detach(), 
@@ -229,7 +227,7 @@ class Actor(nn.Module):
     """Selector network. Output probabilities of 
     selecting each node AND features.
     """
-    def __init__(self, fea_dim, n_layer, actor_h_dim):
+    def __init__(self, fea_dim, n_layer, actor_h_dim, dropout):
         super(Actor, self).__init__()
         self.convs = nn.ModuleList(
                         [GCNConv(fea_dim, fea_dim) for i in range(n_layer)])
@@ -238,12 +236,14 @@ class Actor(nn.Module):
         self.node_lin = nn.Linear(fea_dim, 1)
         self.act = nn.ReLU()
         self.sigmoid = nn.Sigmoid()
+        self.dropout = dropout
 
     def forward(self, x, edge_index, batch):
         # graph convolutions
         for graph_func in self.convs:
             x = graph_func(x, edge_index)
             x = self.act(x)
+            x = F.dropout(x, p=self.dropout, training=self.training)
 
         # 3. Apply a final classifier
         node_prob = torch.squeeze(self.node_lin(x))            # [batch_num_nodes]
@@ -256,13 +256,14 @@ class Actor(nn.Module):
         return self.sigmoid(node_prob), self.sigmoid(fea_prob)
 
 class Critic(nn.Module):
-    def __init__(self, fea_dim, n_layer, critic_h_dim, label_dim):
+    def __init__(self, fea_dim, n_layer, critic_h_dim, label_dim, dropout):
         super(Critic, self).__init__()
         self.convs = nn.ModuleList(
                         [GCNConv(fea_dim, fea_dim) for i in range(n_layer)])
         self.lin1 = nn.Linear(fea_dim, critic_h_dim)
         self.lin2 = nn.Linear(critic_h_dim, label_dim)
         self.act = nn.ReLU()
+        self.dropout = dropout
 
     def forward(self, x_comb, edge_index, batch):
         
@@ -271,6 +272,7 @@ class Critic(nn.Module):
         for graph_func in self.convs:
             x = graph_func(x, edge_index)
             x = self.act(x)
+            x = F.dropout(x, p=self.dropout, training=self.training)
 
         # 2. Readout layer
         # remove masked nodes
@@ -285,19 +287,21 @@ class Critic(nn.Module):
         return out
 
 class Baseline(nn.Module):
-    def __init__(self, fea_dim, n_layer, critic_h_dim, label_dim):
+    def __init__(self, fea_dim, n_layer, critic_h_dim, label_dim, dropout):
         super(Baseline, self).__init__()
         self.convs = nn.ModuleList(
                         [GCNConv(fea_dim, fea_dim) for i in range(n_layer)])
         self.lin1 = nn.Linear(fea_dim, critic_h_dim)
         self.lin2 = nn.Linear(critic_h_dim, label_dim)
         self.act = nn.ReLU()
+        self.dropout = dropout
 
     def forward(self, x, edge_index, batch):
         # graph convolutions
         for graph_func in self.convs:
             x = graph_func(x, edge_index)
             x = self.act(x)
+            x = F.dropout(x, p=self.dropout, training=self.training)
 
         # 2. Readout layer
         x = global_mean_pool(x, batch)  # [batch_size, fea_dim]
