@@ -2,7 +2,7 @@
 
 (1) Data generation
 (2) Train INVASE-GNN
-(3) Evaluate on ground truth and prediction
+(3) Evaluate
 """
 
 import os
@@ -25,7 +25,6 @@ from utils import save_checkpoint, load_previous_state
 from data_processing import load_data
 
 def main():
-
     # check directory structure
     os.makedirs(f"models/", exist_ok=True)
     os.makedirs("runs/", exist_ok=True)
@@ -60,6 +59,7 @@ def main():
     # evaluate on test set
     critic_test_acc, baseline_test_acc, x_test, \
                     selected_features, selected_nodes, y_trues, y_preds = model.evaluate(test_loader, loss, optimizer, args.device, task="test")
+    
     # get summary results on selected features
     print("TEST")
     print("--------")
@@ -73,7 +73,7 @@ def main():
     print(f"saved results to results/{idx_details}.pkl")
 
 def train(model, optimizer, idx_details, loss, device, train_generator, val_generator, epochs):
-    """Main training function (universal)
+    """Main training function
     """
     writer = SummaryWriter(
         log_dir=(f"logs/{idx_details}_{datetime.datetime.now():%d-%m-%Y_%H-%M-%S}"))
@@ -158,6 +158,7 @@ def train(model, optimizer, idx_details, loss, device, train_generator, val_gene
         pass
 
 
+
 def input_parser():
     """
     parse input
@@ -191,12 +192,12 @@ def input_parser():
 
     parser.add_argument('--actor-h-dim',
                         help='hidden state dimensions for actor',
-                        default=128,
+                        default=64,
                         type=int)
 
     parser.add_argument('--critic-h-dim',
                         help='hidden state dimensions for critic',
-                        default=256,
+                        default=64,
                         type=int)
 
     parser.add_argument('--n-layer',
@@ -235,7 +236,7 @@ def input_parser():
 
     # optimiser inputs
     parser.add_argument("--epochs",
-                        default=100,
+                        default=300,
                         type=int,
                         metavar="N",
                         help="number of total epochs to run")
@@ -253,7 +254,7 @@ def input_parser():
                         help="choose an optimizer; SGD, Adam")
 
     parser.add_argument("--learning-rate", "--lr",
-                        default=0.001,
+                        default=0.01,
                         type=float,
                         metavar="float",
                         help="initial learning rate (default: 1e-4)")
@@ -272,7 +273,7 @@ def input_parser():
 
     parser.add_argument("--evaluate",
                         action="store_true",
-                        help="DSkip training and just evaluate on test set")
+                        help="Skip training and just evaluate on test set")
 
     parser.add_argument("--disable-cuda",
                         action="store_true",

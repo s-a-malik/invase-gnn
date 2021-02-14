@@ -1,4 +1,4 @@
-""" Basic Example using GNNExplainer
+""" Basic Example using GNNExplainer (based of PyG example)
 """
 
 import os.path as osp
@@ -25,8 +25,6 @@ print(f'Number of graphs: {len(dataset)}')
 print(f'Number of features: {dataset.num_features}')
 print(f'Number of classes: {dataset.num_classes}')
 
-# torch.manual_seed(12345)
-# dataset = dataset.shuffle()
 indices = [i for i in range(len(dataset))]
 train_idx, test_idx = split(indices, random_state=12345, test_size=0.2)
 train_dataset = dataset[train_idx]

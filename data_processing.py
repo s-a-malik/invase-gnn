@@ -1,5 +1,4 @@
 """Functions for loading/generating graph data.
-
 """
 
 # import packages
@@ -11,22 +10,27 @@ from sklearn.model_selection import train_test_split as split
 from torch_geometric.datasets import TUDataset
 import torch_geometric.transforms as T
 
-# add functions from GNNExplainer to construct synthetic graphs from networkx
 
 # TODO synthetic task
 def syn1_data(seed=0):
     """Synthetic graph dataset 
-    Task: Graph Classification - with
+    Task: Graph Classification - with 
 
     Returns:
     dataset - PyG dataset
     """
+    raise NotImplementedError()
 
 
 def load_data(task, seed, val_size, test_size):
     """Load dataset
-    Task: Graph Classification - dataset of various graphs we want to classify
+    Task: Graph Classification - benchmark datasets. Consisting of various graphs we want to classify.
 
+    Returns:
+    - train_dataset: PyG dataset
+    - val_dataset: PyG dataset
+    - test_dataset: PyG dataset
+    - test_idx: indices of the original dataset used for testing - to recover original data.
     """
     path = osp.join(osp.dirname(osp.realpath(__file__)), 'data', 'TUDataset')
     
@@ -45,7 +49,6 @@ def load_data(task, seed, val_size, test_size):
     else:
          NameError(f"task {args.task} not allowed")
     
-    # 
     print(f'Dataset: {dataset}:')
     print('====================')
     print(f'Number of graphs: {len(dataset)}')
