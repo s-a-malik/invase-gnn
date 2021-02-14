@@ -230,7 +230,7 @@ class Actor(nn.Module):
     def __init__(self, fea_dim, n_layer, actor_h_dim, dropout):
         super(Actor, self).__init__()
         self.convs = torch.nn.ModuleList()
-        self.convs.append(GCNConv(fea_dim, self.actor_h_dim))
+        self.convs.append(GCNConv(fea_dim, actor_h_dim))
         for layer in range(n_layer - 1):
             self.convs.append(GCNConv(actor_h_dim, actor_h_dim))
         self.fea_lin1 = nn.Linear(actor_h_dim, actor_h_dim)
@@ -267,7 +267,7 @@ class Critic(nn.Module):
     def __init__(self, fea_dim, n_layer, critic_h_dim, label_dim, dropout):
         super(Critic, self).__init__()
         self.convs = torch.nn.ModuleList()
-        self.convs.append(GCNConv(fea_dim, self.critic_h_dim))
+        self.convs.append(GCNConv(fea_dim, critic_h_dim))
         for layer in range(n_layer - 1):
             self.convs.append(GCNConv(critic_h_dim, critic_h_dim))
         self.lin1 = nn.Linear(critic_h_dim, critic_h_dim)
@@ -305,7 +305,7 @@ class Baseline(nn.Module):
     def __init__(self, fea_dim, n_layer, critic_h_dim, label_dim, dropout):
         super(Baseline, self).__init__()
         self.convs = torch.nn.ModuleList()
-        self.convs.append(GCNConv(fea_dim, self.critic_h_dim))
+        self.convs.append(GCNConv(fea_dim, critic_h_dim))
         for layer in range(n_layer - 1):
             self.convs.append(GCNConv(critic_h_dim, critic_h_dim))
         self.lin1 = nn.Linear(critic_h_dim, critic_h_dim)
