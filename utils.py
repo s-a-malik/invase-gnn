@@ -13,7 +13,7 @@ Contact: jsyoon0823@gmail.com
 (3) Bernoulli sampling
 """
 
-# Necessary packages
+import os
 import shutil
 
 import numpy as np
@@ -21,7 +21,7 @@ from sklearn.metrics import roc_auc_score, average_precision_score, accuracy_sco
 
 import torch
 
-def feature_performance_metric (ground_truth, importance_score):
+def feature_performance_metric(ground_truth, importance_score):
     """Performance metrics for feature importance (TPR and FDR).
     
     Args:
