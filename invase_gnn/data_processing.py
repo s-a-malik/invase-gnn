@@ -34,9 +34,6 @@ def load_data(task, seed, val_size, test_size):
     if task == 'mutag':
         dataset = 'Mutagenicity'
         dataset = TUDataset(path, dataset, transform=T.NormalizeFeatures(), cleaned=True)
-    elif task == 'reddit':
-        dataset = 'REDDIT-BINARY'
-        dataset = TUDataset(path, dataset, cleaned=True)
     elif task == 'enzymes':
         dataset = 'ENZYMES'
         dataset = TUDataset(path, dataset, transform=T.NormalizeFeatures(), cleaned=True)
