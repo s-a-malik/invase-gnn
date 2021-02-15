@@ -27,6 +27,7 @@ $ python3 main.py --model-type INVASE --task mutag \
 - Comparison to other methods
 - Synthetic data experiments
 - Node classification feature selection
+- Compare edge vs node masking
 
 ## Acknowledgements
 
