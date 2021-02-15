@@ -170,7 +170,7 @@ def input_parser():
                         type=str,
                         default="mutag",
                         metavar="PATH",
-                        help="Task to perform (mutag, syn1)")
+                        help="Task to perform (mutag, proteins, enzymes)")
 
     parser.add_argument('--node-lamda',
                         type=float,
@@ -240,12 +240,6 @@ def input_parser():
                         type=int,
                         metavar="N",
                         help="number of total epochs to run")
-
-    parser.add_argument("--loss",
-                        default="CE",
-                        type=str,
-                        metavar="str",
-                        help="choose a Loss Function")
 
     parser.add_argument("--optim",
                         default="Adam",
