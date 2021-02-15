@@ -270,10 +270,6 @@ class Critic(nn.Module):
         self.lin1 = nn.Linear(critic_h_dim, critic_h_dim)
         self.lin2 = nn.Linear(critic_h_dim, label_dim)
 
-        # self.convs = nn.ModuleList(
-        #                 [GCNConv(fea_dim, fea_dim) for i in range(n_layer)])
-        # self.lin1 = nn.Linear(fea_dim, critic_h_dim)
-        # self.lin2 = nn.Linear(critic_h_dim, label_dim)
         self.act = nn.ReLU()
         self.dropout = dropout
 
